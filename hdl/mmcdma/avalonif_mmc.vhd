@@ -1,15 +1,15 @@
 -- ===================================================================
 -- TITLE : MMC/SD SPI I/F for Avalon Slave
 --
---     VERFASSER : S.OSAFUNE (J-7SYSTEM Works)
---     DATUM     : 2007/01/19 -> 2007/01/31 (HERSTELLUNG)
---               : 2007/01/31 (FESTSTELLUNG)
+--     Design : S.OSAFUNE (J-7SYSTEM Works)
+--     Update : 2007/01/19 -> 2007/01/31 (Fixed)
+--            : 2008/07/17 FRCゼロフラグを追加 
 --
---               : 2008/07/17 FRCゼロフラグを追加 (NEUBEARBEITUNG)
+--            : 2013/04/03 CD変化フラグ、動作クロックレジスタを追加 
 --
 -- ===================================================================
 -- *******************************************************************
---     Copyright (C) 2008, J-7SYSTEM Works.  All rights Reserved.
+--     Copyright (C) 2013, J-7SYSTEM Works.  All rights Reserved.
 --
 -- * This module is a free sourcecode and there is NO WARRANTY.
 -- * No restriction on use. You can use, modify and redistribute it
@@ -25,6 +25,9 @@ use IEEE.std_logic_unsigned.all;
 use IEEE.std_logic_arith.all;
 
 entity avalonif_mmc is
+	generic(
+		SYSTEMCLOCKINFO		: integer := 0		-- 駆動クロック情報(Hz) 
+	);
 	port(
 		----- Avalonバス信号 -----------
 		clk			: in  std_logic;
@@ -43,8 +46,8 @@ entity avalonif_mmc is
 		MMC_SCK		: out std_logic;
 		MMC_SDO		: out std_logic;
 		MMC_SDI		: in  std_logic := '1';
-		MMC_CD		: in  std_logic := '1';	-- カード挿入検出 
-		MMC_WP		: in  std_logic := '1'	-- ライトプロテクト検出 
+		MMC_CD		: in  std_logic := '1';	-- カード挿入検出 (カード挿入で'0') 
+		MMC_WP		: in  std_logic := '1'	-- ライトプロテクト検出 (ライトプロテクト時に'0') 
 	);
 end avalonif_mmc;
 
@@ -56,6 +59,7 @@ architecture RTL of avalonif_mmc is
 	signal read_0_sig	: std_logic_vector(31 downto 0);
 	signal read_1_sig	: std_logic_vector(31 downto 0);
 	signal read_2_sig	: std_logic_vector(31 downto 0);
+	signal read_3_sig	: std_logic_vector(31 downto 0);
 
 	signal divref_reg	: std_logic_vector(7 downto 0);
 	signal divcount		: std_logic_vector(7 downto 0);
@@ -64,28 +68,33 @@ architecture RTL of avalonif_mmc is
 	signal irqena_reg	: std_logic;
 	signal exit_reg		: std_logic;
 	signal mmc_wp_reg	: std_logic;
-	signal mmc_cd_reg	: std_logic;
+	signal mmc_cd_0_reg	: std_logic;
+	signal mmc_cd_1_reg	: std_logic;
+	signal mmc_cd_2_reg	: std_logic;
 	signal ncs_reg		: std_logic;
 	signal sck_reg		: std_logic;
 	signal sdo_reg		: std_logic;
 	signal frc_reg		: std_logic_vector(31 downto 0);
 	signal frczero_reg	: std_logic;
+	signal cdalter_reg	: std_logic;
 
 begin
 
 	irq <= exit_reg when irqena_reg='1' else '0';
 
-	readdata <= read_2_sig when address="10" else
-				read_1_sig when address="01" else
-				read_0_sig;
+	with address select readdata <=
+		read_3_sig when "11",
+		read_2_sig when "10",
+		read_1_sig when "01",
+		read_0_sig when others;
 
 	read_0_sig(31 downto 16) <= (others=>'0');
 	read_0_sig(15) <= irqena_reg;
 	read_0_sig(14) <= '0';
-	read_0_sig(13) <= '0';
+	read_0_sig(13) <= cdalter_reg;
 	read_0_sig(12) <= frczero_reg;
 	read_0_sig(11) <= mmc_wp_reg;
-	read_0_sig(10) <= mmc_cd_reg;
+	read_0_sig(10) <= mmc_cd_2_reg;
 	read_0_sig(9)  <= exit_reg;
 	read_0_sig(8)  <= ncs_reg;
 	read_0_sig(7 downto 0) <= rxddata;
@@ -94,6 +103,9 @@ begin
 	read_1_sig(7 downto 0) <= divref_reg;
 
 	read_2_sig <= frc_reg;
+
+	read_3_sig <= CONV_STD_LOGIC_VECTOR(SYSTEMCLOCKINFO, 32);
+
 
 	MMC_nCS <= ncs_reg;
 	MMC_SCK <= sck_reg;
@@ -108,11 +120,16 @@ begin
 			sck_reg    <= '1';
 			sdo_reg    <= '1';
 			exit_reg   <= '1';
+
 			frc_reg    <= (others=>'0');
-			frczero_reg<= '1';
+			frczero_reg <= '1';
+
+			mmc_cd_0_reg <= '1';
+			mmc_cd_1_reg <= '1';
+			mmc_cd_2_reg <= '1';
+			cdalter_reg  <= '0';
 
 		elsif(clk'event and clk='1') then
-			mmc_cd_reg <= MMC_CD;
 			mmc_wp_reg <= MMC_WP;
 
 			case state is
@@ -183,6 +200,17 @@ begin
 				frczero_reg <= '1';
 			else
 				frczero_reg <= '0';
+			end if;
+
+
+			mmc_cd_0_reg <= MMC_CD;
+			mmc_cd_1_reg <= mmc_cd_0_reg;
+			mmc_cd_2_reg <= mmc_cd_1_reg;
+
+			if (mmc_cd_1_reg /= mmc_cd_2_reg) then
+				cdalter_reg <= '1';
+			elsif (chipselect='1' and write='1' and address="00" and writedata(13)='0') then
+				cdalter_reg <= '0';
 			end if;
 
 		end if;

@@ -1,13 +1,14 @@
 -- ===================================================================
 -- TITLE : MMC/SD SPI - Read DMA I/F for Avalon Slave
 --
---     VERFASSER : S.OSAFUNE (J-7SYSTEM Works)
---     DATUM     : 2008/07/15 -> 2008/07/17 (HERSTELLUNG)
---               : 2008/07/17 (FESTSTELLUNG)
+--     Design : S.OSAFUNE (J-7SYSTEM Works)
+--     Update : 2008/07/15 -> 2008/07/17 (Fixed)
+--
+--            : 2013/04/03 コメント修正 
 --
 -- ===================================================================
 -- *******************************************************************
---     Copyright (C) 2008, J-7SYSTEM Works.  All rights Reserved.
+--     Copyright (C) 2013, J-7SYSTEM Works.  All rights Reserved.
 --
 -- * This module is a free sourcecode and there is NO WARRANTY.
 -- * No restriction on use. You can use, modify and redistribute it
@@ -31,6 +32,9 @@ use IEEE.std_logic_unsigned.all;
 use IEEE.std_logic_arith.all;
 
 entity avalonif_mmcdma is
+	generic(
+		SYSTEMCLOCKINFO		: integer := 0		-- 駆動クロック情報(Hz) 
+	);
 	port(
 		clk			: in  std_logic;
 		reset		: in  std_logic;
@@ -50,8 +54,8 @@ entity avalonif_mmcdma is
 		MMC_SCK		: out std_logic;
 		MMC_SDO		: out std_logic;
 		MMC_SDI		: in  std_logic := '1';
-		MMC_CD		: in  std_logic := '1';	-- カード挿入検出 
-		MMC_WP		: in  std_logic := '1'	-- ライトプロテクト検出 
+		MMC_CD		: in  std_logic := '1';	-- カード挿入検出 (カード挿入で'0') 
+		MMC_WP		: in  std_logic := '1'	-- ライトプロテクト検出 (ライトプロテクト時に'0') 
 	);
 end avalonif_mmcdma;
 
@@ -82,6 +86,9 @@ architecture RTL of avalonif_mmcdma is
 
 
 	component avalonif_mmc
+	generic(
+		SYSTEMCLOCKINFO		: integer
+	);
 	port(
 		----- Avalonバス信号 -----------
 		clk			: in  std_logic;
@@ -293,6 +300,9 @@ begin
 						write when mmcregsel_sig='1' else '0';
 
 	U_mmcif : avalonif_mmc
+	generic map(
+		SYSTEMCLOCKINFO => SYSTEMCLOCKINFO
+	)
 	port map (
 		clk			=> clk,
 		reset		=> reset,

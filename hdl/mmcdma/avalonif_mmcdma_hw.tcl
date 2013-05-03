@@ -9,7 +9,7 @@
 # | null 2010.12.30.12:09:11
 # | 
 # | 
-# | ../mmcdma/avalonif_mmcdma.vhd
+# | D:/PROJECT/DE0/cineraria/mmcdma/avalonif_mmcdma.vhd
 # | 
 # |    ./avalonif_mmcdma.vhd syn, sim
 # |    ./avalonif_mmc.vhd syn, sim
@@ -52,6 +52,11 @@ add_file dmamem.vhd {SYNTHESIS SIMULATION}
 # +-----------------------------------
 # | parameters
 # | 
+add_parameter SYSTEMCLOCKINFO INTEGER 0 ""
+set_parameter_property SYSTEMCLOCKINFO SYSTEM_INFO {CLOCK_RATE clock_reset} 
+set_parameter_property SYSTEMCLOCKINFO DISPLAY_NAME "Drive clock rate"
+set_parameter_property SYSTEMCLOCKINFO UNITS Hertz
+
 # | 
 # +-----------------------------------
 
